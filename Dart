@@ -1,0 +1,172 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+
+void main() {
+  runApp(RunLuxApp());
+}
+
+class RunLuxApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'RunLux',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        fontFamily: 'Helvetica',
+        colorScheme: ColorScheme.dark(
+          primary: Colors.deepPurpleAccent,
+          background: Color(0xFF121212),
+          secondary: Colors.amberAccent,
+        ),
+        scaffoldBackgroundColor: Color(0xFF1E1E1E),
+      ),
+      home: RunPage(),
+    );
+  }
+}
+
+class RunPage extends StatefulWidget {
+  @override
+  _RunPageState createState() => _RunPageState();
+}
+
+class _RunPageState extends State<RunPage> with TickerProviderStateMixin {
+  bool isRunning = false;
+  double distance = 0.0;
+  Position? _lastPosition;
+  Timer? _timer;
+  FlutterTts tts = FlutterTts();
+
+  @override
+  void initState() {
+    super.initState();
+    _initTTS();
+  }
+
+  Future<void> _initTTS() async {
+    await tts.setLanguage("en-US");
+    await tts.setPitch(1.1);
+    await tts.setSpeechRate(0.45);
+  }
+
+  void _startRun() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.deniedForever || permission == LocationPermission.denied) {
+      return;
+    }
+
+    setState(() {
+      isRunning = true;
+      distance = 0;
+      _lastPosition = null;
+    });
+
+    tts.speak("Let's go! I'm with you every step of the way!");
+
+    _timer = Timer.periodic(Duration(seconds: 2), (_) async {
+      Position pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      if (_lastPosition != null) {
+        double d = Geolocator.distanceBetween(
+          _lastPosition!.latitude,
+          _lastPosition!.longitude,
+          pos.latitude,
+          pos.longitude,
+        );
+        setState(() {
+          distance += d;
+        });
+
+        if (distance >= 1000 && distance % 1000 < 10) {
+          tts.speak("Nice! You've run ${(distance / 1000).toStringAsFixed(1)} kilometers.");
+        }
+      }
+      _lastPosition = pos;
+    });
+  }
+
+  void _stopRun() {
+    tts.speak("Run ended. Great work out there.");
+    _timer?.cancel();
+    setState(() {
+      isRunning = false;
+    });
+  }
+
+  Widget _buildStartButton() {
+    return GestureDetector(
+      onTap: isRunning ? _stopRun : _startRun,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 500),
+        padding: EdgeInsets.symmetric(vertical: 20, horizontal: 50),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.deepPurpleAccent, Colors.purple],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.deepPurpleAccent.withOpacity(0.6),
+              blurRadius: 20,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Text(
+          isRunning ? 'Stop Run' : 'Start Run',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRunStats() {
+    return AnimatedOpacity(
+      duration: Duration(milliseconds: 500),
+      opacity: isRunning ? 1.0 : 0.5,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '${(distance / 1000).toStringAsFixed(2)} km',
+            style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 20),
+          Text(
+            isRunning ? 'Running with AI Buddy...' : 'Not Running',
+            style: TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.directions_run_rounded, size: 80, color: Colors.amberAccent),
+              SizedBox(height: 30),
+              _buildRunStats(),
+              SizedBox(height: 50),
+              _buildStartButton(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
