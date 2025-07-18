@@ -1,0 +1,4 @@
+geolocator: ^10.1.0
+flutter_tts: ^3.8.5
+
+flutter pub get
